@@ -15,6 +15,7 @@ import (
 	"log"
 	"math/rand"
 	nethttp "net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +41,7 @@ type InfluxQueryBenchmarker struct {
 
 	queryPool sync.Pool
 	queryChan chan []*http.Query
+	latenciesFile     string
 
 	useApiV2  bool
 	bucketId  string // InfluxDB v2
@@ -70,6 +72,7 @@ func (b *InfluxQueryBenchmarker) Init() {
 	flag.IntVar(&b.clientIndex, "client-index", 0, "Index of a client host running this tool. Used to distribute load")
 	flag.StringVar(&b.organization, "organization", "", "Organization name (InfluxDB v2).")
 	flag.StringVar(&b.token, "token", "", "Authentication token (InfluxDB v2).")
+	flag.StringVar(&b.latenciesFile, "latenciesFile", "", "write batch latencies to csv file (optional). Appends to given file and will create the file if it does not exist.")
 }
 
 func (b *InfluxQueryBenchmarker) Validate() {
@@ -277,6 +280,27 @@ func (b *InfluxQueryBenchmarker) processSingleQuery(w http.HTTPClient, q *http.Q
 		q.Path = opts.Path
 	}
 	lagMillis, err := w.Do(q, opts)
+
+
+	if len(b.latenciesFile) > 0 {
+		var err2 error
+		var file *os.File
+		file, err2 = os.OpenFile(b.latenciesFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		defer file.Close()
+		if err2 != nil {
+			log.Fatalf("Failed opening latencies file (%s): %s", b.latenciesFile, err2)
+		}
+		var lagns int64 = int64(lagMillis * 1e6)
+		line := fmt.Sprintf("%s%d%s%d%s", "query ", q.ID, ", ", lagns, " ns\n")
+		if file != nil {
+			_, err3 := file.WriteString(line)
+			if err != nil {
+				log.Fatalf("failed writing to file: %s", err3)
+			}
+		}
+
+	}
+
 	stat := statPool.Get().(*bulk_query.Stat)
 	stat.Init(q.HumanLabel, lagMillis)
 	statChan <- stat

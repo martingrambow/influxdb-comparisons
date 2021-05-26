@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	neturl "net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,6 +45,7 @@ type InfluxBulkLoad struct {
 	clientIndex       int
 	organization      string // InfluxDB v2
 	token             string // InfluxDB v2
+	latenciesFile     string
 	//runtime vars
 	bufPool               sync.Pool
 	batchChan             chan batch
@@ -113,6 +115,7 @@ func (l *InfluxBulkLoad) Init() {
 	flag.IntVar(&l.ingestRateLimit, "ingest-rate-limit", -1, "Ingest rate limit in values/s (-1 = no limit).")
 	flag.StringVar(&l.organization, "organization", "", "Organization name (InfluxDB v2).")
 	flag.StringVar(&l.token, "token", "", "Authentication token (InfluxDB v2).")
+	flag.StringVar(&l.latenciesFile, "latenciesFile", "", "write batch latencies to csv file (optional). Appends to given file and will create the file if it does not exist.")
 }
 
 func (l *InfluxBulkLoad) Validate() {
@@ -453,6 +456,15 @@ func (l *InfluxBulkLoad) processBatches(w *HTTPWriter, backoffSrc chan bool, tel
 
 	defer workersGroup.Done()
 
+	var file *os.File
+	if len(l.latenciesFile) > 0 {
+		var err2 error
+		file, err2 = os.OpenFile(l.latenciesFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		if err2 != nil {
+			log.Fatalf("Failed opening latencies file (%s): %s", l.latenciesFile, err2)
+		}
+	}
+
 	for batch := range l.batchChan {
 		batchesSeen++
 
@@ -469,17 +481,26 @@ func (l *InfluxBulkLoad) processBatches(w *HTTPWriter, backoffSrc chan bool, tel
 			sleepTime := l.backoff
 			timeStart := time.Now()
 			for {
+				var lat int64 = 0
 				if l.useGzip {
 					compressedBatch := l.bufPool.Get().(*bytes.Buffer)
 					fasthttp.WriteGzip(compressedBatch, batch.Buffer.Bytes())
 					//bodySize = len(compressedBatch.Bytes())
-					_, err = w.WriteLineProtocol(compressedBatch.Bytes(), true)
+					lat, err = w.WriteLineProtocol(compressedBatch.Bytes(), true)
 					// Return the compressed batch buffer to the pool.
 					compressedBatch.Reset()
 					l.bufPool.Put(compressedBatch)
 				} else {
 					//bodySize = len(batch.Bytes())
-					_, err = w.WriteLineProtocol(batch.Buffer.Bytes(), false)
+					lat, err = w.WriteLineProtocol(batch.Buffer.Bytes(), false)
+				}
+
+				line := fmt.Sprintf("%s%s%s%d%s%d%s", "woker ", telemetryWorkerLabel, ", batch ", batchesSeen, ", ", lat, " ns\n")
+				if file != nil {
+					_, err3 := file.WriteString(line)
+					if err != nil {
+						log.Fatalf("failed writing to file: %s", err3)
+					}
 				}
 
 				if err == BackoffError {
@@ -562,6 +583,11 @@ func (l *InfluxBulkLoad) processBatches(w *HTTPWriter, backoffSrc chan bool, tel
 			bulk_load.Runner.StatChan <- stat
 		}
 	}
+
+	if file != nil {
+		file.Close()
+	}
+
 
 	return nil
 }
