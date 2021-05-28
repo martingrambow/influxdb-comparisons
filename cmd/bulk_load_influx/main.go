@@ -482,6 +482,7 @@ func (l *InfluxBulkLoad) processBatches(w *HTTPWriter, backoffSrc chan bool, tel
 			timeStart := time.Now()
 			for {
 				var lat int64 = 0
+				var latms float64 = 0
 				if l.useGzip {
 					compressedBatch := l.bufPool.Get().(*bytes.Buffer)
 					fasthttp.WriteGzip(compressedBatch, batch.Buffer.Bytes())
@@ -494,8 +495,9 @@ func (l *InfluxBulkLoad) processBatches(w *HTTPWriter, backoffSrc chan bool, tel
 					//bodySize = len(batch.Bytes())
 					lat, err = w.WriteLineProtocol(batch.Buffer.Bytes(), false)
 				}
-
-				line := fmt.Sprintf("%s%s%s%d%s%d%s", "woker ", telemetryWorkerLabel, ", batch ", batchesSeen, ", ", lat, " ns\n")
+				latms = float64(lat) / 1e6
+				// Worker, batch, latency (ms)
+				line := fmt.Sprintf("%s%s%d%s%d%s", telemetryWorkerLabel, ", ", batchesSeen, ", ", latms, "\n")
 				if file != nil {
 					_, err3 := file.WriteString(line)
 					if err != nil {

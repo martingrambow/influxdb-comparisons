@@ -290,8 +290,8 @@ func (b *InfluxQueryBenchmarker) processSingleQuery(w http.HTTPClient, q *http.Q
 		if err2 != nil {
 			log.Fatalf("Failed opening latencies file (%s): %s", b.latenciesFile, err2)
 		}
-		var lagns int64 = int64(lagMillis * 1e6)
-		line := fmt.Sprintf("%s%d%s%d%s", "query ", q.ID, ", ", lagns, " ns\n")
+		//Query ID, latency (ms)
+		line := fmt.Sprintf("%d%s%d%s", q.ID, ", ", lagMillis, "\n")
 		if file != nil {
 			_, err3 := file.WriteString(line)
 			if err != nil {
