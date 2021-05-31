@@ -497,7 +497,7 @@ func (l *InfluxBulkLoad) processBatches(w *HTTPWriter, backoffSrc chan bool, tel
 				}
 				latms = float64(lat) / 1e6
 				// Worker, batch, latency (ms)
-				line := fmt.Sprintf("%s%s%d%s%d%s", telemetryWorkerLabel, ", ", batchesSeen, ", ", latms, "\n")
+				line := fmt.Sprintf("%s%s%d%s%f%s", telemetryWorkerLabel, ", ", batchesSeen, ", ", latms, "\n")
 				if file != nil {
 					_, err3 := file.WriteString(line)
 					if err != nil {
