@@ -10,4 +10,4 @@ require (
 	github.com/valyala/fasthttp v1.24.0
 )
 
-replace github.com/influxdata/influxdb-comparisons => github.com/martingrambow/influxdb-comparisons
+replace github.com/martingrambow/influxdb-comparisons => github.com/influxdata/influxdb-comparisons
