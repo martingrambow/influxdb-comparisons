@@ -9,3 +9,5 @@ require (
 	github.com/pkg/profile v1.6.0
 	github.com/valyala/fasthttp v1.24.0
 )
+
+replace github.com/martingrambow/influxdb-comparisons => github.com/influxdata/influxdb-comparisons
